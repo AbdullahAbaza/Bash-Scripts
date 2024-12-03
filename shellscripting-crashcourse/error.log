@@ -1,0 +1,2 @@
+ls: cannot access 'notexistingdir': No such file or directory
+ls: cannot access 'myfile': No such file or directory
