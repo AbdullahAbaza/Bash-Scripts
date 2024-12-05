@@ -1,10 +1,21 @@
 #!/bin/bash
 
-# Script Name: system-monitoring_v1.0.sh
-# Description: script to monitor system resources 
 # Author: Abdullah Abaza
 # Date: 2023-11-14
 # Version: 1.0
+# Script Name: system-monitoring_v1.0.sh
+# Description: script to monitor system resources 
+
+# Usage: ./system-monitoring_v1.0.sh -e "your@email.com"
+# Using SMTP server:
+# ./system-monitoring_v1.0.sh -e "your@email.com" \
+#     --smtp-server=smtp.gmail.com \
+#     --smtp-port=587 \
+#     --smtp-user=your@gmail.com \
+#    
+# With debugging:  ./system-monitoring_v1.0.sh -e "your@email.com" --mail-debug
+
+
 
 # Exit on any error
 set -e
@@ -23,9 +34,17 @@ MEM_THRESHOLD=90
 SEND_EMAIL=false
 
 # Email Configuration
-EMAIL_TO="abdullahabaza96@example.com"
+EMAIL_TO="mail@example.com"
 EMAIL_FROM="system.monitor@$(hostname)"
 EMAIL_SUBJECT="System Monitor Alert - $(hostname)"
+
+# Add new email configuration variables
+MAIL_CMD=""
+MAIL_DEBUG=false
+SMTP_SERVER=""
+SMTP_PORT="587"
+SMTP_USER=""
+SMTP_PASS=""
 
 OUTPUT_DIR="/var/log/"
 OUTPUT_FILE="system_monitor.log"
@@ -42,11 +61,16 @@ show_help() {
     echo "  -o OUTPUT_FILE          Output Log File Name"
     echo "  -e EMAIL_TO             Email address to send alerts to"
     echo "  -h                      Show this help message"
+    echo "  --smtp-server HOST      SMTP server for email alerts"
+    echo "  --smtp-port PORT        SMTP port (default: 587)"
+    echo "  --smtp-user USER        SMTP username"
+    echo "  --smtp-pass PASS        SMTP password"
+    echo "  --mail-debug           Enable email debugging"
     exit 0
 }
 
 # Parse command line arguments
-while getopts "d:c:m:o:e:h" opt; do
+while getopts "d:c:m:o:e:h-:" opt; do
     case $opt in
         d) DISK_THRESHOLD="$OPTARG" ;;
         c) CPU_THRESHOLD="$OPTARG";;
@@ -54,6 +78,16 @@ while getopts "d:c:m:o:e:h" opt; do
         o) OUTPUT_FILE="$OPTARG";;
         e) EMAIL_TO="$OPTARG";;
         h) show_help ;;
+        -)
+            case "${OPTARG}" in
+                smtp-server=*) SMTP_SERVER="${OPTARG#*=}" ;;
+                smtp-port=*) SMTP_PORT="${OPTARG#*=}" ;;
+                smtp-user=*) SMTP_USER="${OPTARG#*=}" ;;
+                smtp-pass=*) SMTP_PASS="${OPTARG#*=}" ;;
+                mail-debug) MAIL_DEBUG=true ;;
+                *) echo "Invalid option: --${OPTARG}" >&2; exit 1 ;;
+            esac
+            ;;
         ?) echo "Invalid option. Use -h for help."; exit 1 ;;
     esac
 done 
@@ -111,6 +145,26 @@ check_top5_mem_proc() {
     ps -eo pid,ppid,cmd,comm,%mem,%cpu --sort=-%mem | head -6
 }
 
+# Function to check mail command availability
+check_mail_command() {
+    # Check for available mail commands
+    if command -v mailx >/dev/null 2>&1; then
+        MAIL_CMD="mailx"
+    elif command -v mail >/dev/null 2>&1; then
+        MAIL_CMD="mail"
+    else
+        echo "ERROR: Neither 'mail' nor 'mailx' command found. Please install mailutils package."
+        return 1
+    fi
+
+    # Test mail configuration
+    if [ "$MAIL_DEBUG" = true ]; then
+        echo "Using mail command: $MAIL_CMD"
+        $MAIL_CMD -V 2>&1 || true
+    fi
+    return 0
+}
+
 # Function to send email alert
 send_email_alert() {
     local output_path="$1"
@@ -131,12 +185,45 @@ send_email_alert() {
     
     email_body+="\nPlease check the attached report for details.\n"
     
-    if command -v mail >/dev/null 2>&1; then
-        echo -e "$email_body" | mail -s "$EMAIL_SUBJECT" -a "$output_path" "$EMAIL_TO"
-        echo "Alert email sent to $EMAIL_TO"
-    else
-        echo "Warning: 'mail' command not found. Please install mailutils to enable email alerts."
+    # Check mail command availability
+    if ! check_mail_command; then
+        echo "ERROR: Email alert could not be sent - mail command not available"
+        return 1
     fi
+
+    # Prepare mail command based on available configuration
+    local mail_opts=()
+    case "$MAIL_CMD" in
+        "mailx")
+            mail_opts+=("-s" "$EMAIL_SUBJECT")
+            if [ -n "$SMTP_SERVER" ]; then
+                mail_opts+=("-S" "smtp=$SMTP_SERVER:$SMTP_PORT")
+                [ -n "$SMTP_USER" ] && mail_opts+=("-S" "smtp-auth=login" "-S" "smtp-auth-user=$SMTP_USER")
+                [ -n "$SMTP_PASS" ] && mail_opts+=("-S" "smtp-auth-password=$SMTP_PASS")
+            fi
+            mail_opts+=("-a" "$output_path")
+            ;;
+        "mail")
+            mail_opts+=("-s" "$EMAIL_SUBJECT" "-a" "$output_path")
+            ;;
+    esac
+
+    # Send email with error handling
+    if [ "$MAIL_DEBUG" = true ]; then
+        echo "Sending email with command: $MAIL_CMD ${mail_opts[*]} $EMAIL_TO"
+    fi
+
+    if echo -e "$email_body" | $MAIL_CMD "${mail_opts[@]}" "$EMAIL_TO" 2>/tmp/mail.err; then
+        echo "Alert email sent successfully to $EMAIL_TO"
+        [ "$MAIL_DEBUG" = true ] && cat /tmp/mail.err
+    else
+        echo "ERROR: Failed to send email alert"
+        cat /tmp/mail.err
+        return 1
+    fi
+
+    [ -f /tmp/mail.err ] && rm /tmp/mail.err
+    return 0
 }
 
 # Function to automate monitoring
@@ -150,7 +237,7 @@ generate_report() {
     local output_path="${OUTPUT_DIR}/${OUTPUT_FILE}"
 
     {
-        echo -e "${BLUE}System Monitoring Report - $(date '+%Y-%m-%d %H:%M:%S')${NORMAL}"
+        echo -e "\n$(date '+%Y-%m-%d %H:%M:%S')\n${BLUE}System Monitoring Report - $(date '+%Y-%m-%d %H:%M:%S')${NORMAL}"
         echo -e "====================================================================\n"
 
         echo -e "${BLUE}CPU Usage:${NORMAL}"
@@ -166,7 +253,7 @@ generate_report() {
         check_top5_mem_proc
 
         echo -e "\n========================================================================="
-    } | tee "$output_path"
+    } | tee -a "$output_path"
 
     echo -e "\nReport has been saved to: $output_path"
 

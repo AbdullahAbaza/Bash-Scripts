@@ -53,22 +53,22 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 # Help function with improved formatting
 show_help() {
     cat << EOF
-Usage: $(basename "$0") [OPTIONS]
-Generate a comprehensive system monitoring report
+    Usage: $(basename "$0") [OPTIONS]
+    Generate a comprehensive system monitoring report
 
-Options:
-  -d THRESHOLD  Disk usage warning threshold (default: ${DEFAULT_DISK_THRESHOLD}%)
-  -c THRESHOLD  CPU usage warning threshold (default: ${DEFAULT_CPU_THRESHOLD}%)
-  -m THRESHOLD  Memory usage warning threshold (default: ${DEFAULT_MEM_THRESHOLD}%)
-  -o FILE       Output log file name (default: ${DEFAULT_OUTPUT_FILE})
-  -e EMAIL      Email address to send alerts to
-  -v           Verbose output
-  -h           Show this help message
+    Options:
+    -d THRESHOLD  Disk usage warning threshold (default: ${DEFAULT_DISK_THRESHOLD}%)
+    -c THRESHOLD  CPU usage warning threshold (default: ${DEFAULT_CPU_THRESHOLD}%)
+    -m THRESHOLD  Memory usage warning threshold (default: ${DEFAULT_MEM_THRESHOLD}%)
+    -o FILE       Output log file name (default: ${DEFAULT_OUTPUT_FILE})
+    -e EMAIL      Email address to send alerts to
+    -v           Verbose output
+    -h           Show this help message
 
-Example:
-  $(basename "$0") -d 75 -c 85 -m 80 -e admin@example.com -o custom_report.log
-EOF
-    exit 0
+    Example:
+    $(basename "$0") -d 75 -c 85 -m 80 -e admin@example.com -o custom_report.log
+    EOF
+        exit 0
 }
 
 # Improved logging function
