@@ -44,7 +44,7 @@ MAIL_DEBUG=false
 SMTP_SERVER=""
 SMTP_PORT="587"
 SMTP_USER=""
-SMTP_PASS=""
+SMTP_PASS="xjbs dgya kkjv hkgk"
 
 OUTPUT_DIR="/var/log/"
 OUTPUT_FILE="system_monitor.log"
