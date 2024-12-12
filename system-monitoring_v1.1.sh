@@ -67,8 +67,8 @@ show_help() {
 
     Example:
     $(basename "$0") -d 75 -c 85 -m 80 -e admin@example.com -o custom_report.log
-    EOF
-        exit 0
+EOF
+    exit 0
 }
 
 # Improved logging function
